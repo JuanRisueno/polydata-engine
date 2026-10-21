@@ -6,27 +6,42 @@ services:
     container_name: pde_api
     ports:
       - "8000:8000"
-    
-    # Montaje de volumen para desarrollo local (permite hot-reload de código)
     volumes:
-      - ./src:/app/src
-    
+      - .:/app
     environment:
       - ENVIRONMENT=development
-    
-    # Comandos con autorecarga activada para desarrollo
+      - PYTHONUNBUFFERED=1
     command: uvicorn src.pde.api.main:app --host 0.0.0.0 --port 8000 --reload
-
-    # ==========================================================================
-    # MEDIDAS DE SEGURIDAD A NIVEL DE CONTENEDOR (Security Hardening)
-    # ==========================================================================
     security_opt:
-      # Previene la escalada de privilegios dentro del contenedor
       - no-new-privileges:true
-    
-    # Limita el uso de recursos para prevenir agotamiento de memoria/CPU por DoS
     deploy:
       resources:
         limits:
           cpus: '1.50'
           memory: 1024M
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pde_frontend
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+    environment:
+      - ENVIRONMENT=development
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+      - PDE_API_URL=http://api:8000
+    # Asegúrate de que ejecute 'streamlit run' y no 'uvicorn':
+    command: streamlit run frontend/app.py --server.port=8501 --server.address=0.0.0.0 --browser.gatherUsageStats=false
+    depends_on:
+      - api
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 512M

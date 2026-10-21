@@ -1,8 +1,10 @@
-from fastapi import FastAPI, Request, UploadFile, File, HTTPException, status
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from src.pde.core.detector import FileDetector, DetectionResult
+from src.pde.core.detector import DetectionResult, FileDetector
+from src.pde.core.explorer import DatasetExplorer, DatasetSummary
+from src.pde.core.parser import DatasetParser
 
 # ==============================================================================
 # CONFIGURACIÓN Y CONSTANTES DE SEGURIDAD
@@ -11,8 +13,10 @@ from src.pde.core.detector import FileDetector, DetectionResult
 # Límite global de tamaño para archivos subidos (50 MB)
 MAX_UPLOAD_SIZE_BYTES: int = 50 * 1024 * 1024
 
-# Instancia global del detector polimórfico
+# Instancias globales de los motores del Bloque 1
 detector = FileDetector(max_allowed_bytes=MAX_UPLOAD_SIZE_BYTES)
+parser = DatasetParser(max_allowed_memory_mb=100)
+explorer = DatasetExplorer()
 
 
 # ==============================================================================
@@ -96,7 +100,7 @@ async def health_check():
 
 
 # ==============================================================================
-# ENDPOINT DE INSPECCIÓN Y DETECCIÓN POLIMÓRFICA
+# ENDPOINTS DEL MOTOR DE DETECCIÓN Y ANÁLISIS (EDA BLOQUE 1)
 # ==============================================================================
 
 @app.post(
@@ -130,4 +134,44 @@ async def detect_file(file: UploadFile = File(...)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error interno durante la inspección del archivo: {str(err)}"
+        )
+
+
+@app.post(
+    "/api/v1/datasets/analyze",
+    response_model=DatasetSummary,
+    status_code=status.HTTP_200_OK,
+    summary="Ingesta, parsing y análisis exploratorio completo (Bloque 1 EDA)",
+    tags=["EDA Engine"],
+    description=(
+        "Ejecuta la canalización completa del Bloque 1: detecta la firma del archivo, "
+        "aplica sanitización de fórmulas, parsea el contenido en memoria y devuelve "
+        "el diagnóstico estructural completo (dimensiones, dtypes, nulos, vistas previas y estadísticas)."
+    )
+)
+async def analyze_dataset(file: UploadFile = File(...)):
+    try:
+        content = await file.read()
+        filename = file.filename or "unknown_dataset"
+
+        # 1. Detección binaria
+        detection = detector.analyze_bytes(content=content, filename=filename)
+
+        # 2. Parsing y sanitización
+        parsed_dataset = parser.parse(content=content, detection=detection)
+
+        # 3. Análisis exploratorio en memoria
+        summary = explorer.analyze(parsed_dataset.dataframe, preview_rows=5)
+
+        return summary
+
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Error en la validación/parsing del dataset: {str(val_err)}"
+        )
+    except Exception as err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno al procesar el dataset: {str(err)}"
         )

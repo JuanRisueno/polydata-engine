@@ -1,25 +1,27 @@
 # PolyData Engine (PDE)
 
-Motor polimórfico de alta seguridad desarrollado en Python y FastAPI para la ingesta, validación, detección de tipos y procesamiento heterogéneo de datasets (CSV, TSV, JSON, ARFF, Parquet) bajo principios de **Security by Design** e I/O en memoria.
+Motor polimórfico de alta seguridad desarrollado en Python y FastAPI para la ingesta, validación, detección de tipos y procesamiento heterogéneo de datasets (CSV, TSV, JSON, ARFF, Parquet) bajo principios de **Security by Design** e I/O en memoria, junto con una interfaz web interactiva en Streamlit.
 
 ---
 
 ## 🚀 Características Principales
 
-* **Detección Polimórfica de Archivos:** Identificación precisa del tipo MIME real, codificación (*encoding*) y formato mediante firmas binarias (`libmagic` / `charset-normalizer`), evitando la suplantación de extensiones falsas.
+* **Detección Polimórfica de Archivos:** Identificación precisa del tipo MIME real, codificación (*encoding*) y formato mediante firmas binarias (`libmagic` / `charset-normalizer`) e inspección de buffer, evitando la suplantación por extensiones falsas.
+* **Interfaz Web Modular:** Panel interactivo desarrollado en Streamlit desacoplado de la API, estructurado modularmente (`components`, `services`, `styles`, `utils`), con soporte para arrastrar/soltar datasets, visualización de métricas sin truncamiento y limpieza en caliente.
 * **Security by Design:** Middleware de cabeceras HTTP de seguridad estrictamente configuradas (`X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`, `Referrer-Policy` y `Content-Security-Policy` ajustada para Swagger UI).
 * **Procesamiento Seguro:** Prevención de ataques DoS mediante límites de tamaño por petición (50 MB) y gestión directa de buffers en RAM (*Zero-Disk-I/O*).
-* **Infraestructura Contenerizada:** Orquestación mediante Docker y Docker Compose para entornos de producción y desarrollo aislados.
+* **Infraestructura Contenerizada:** Orquestación mediante Docker y Docker Compose aislando los servicios de backend (`api`) y frontend (`frontend`) en una red privada interna.
 
 ---
 
 ## 🛠️ Stack Tecnológico
 
 * **Lenguaje:** Python 3.11+
-* **Framework Web:** FastAPI / Uvicorn
-* **Contenerización:** Docker / Docker Compose
+* **Backend Framework:** FastAPI / Uvicorn (ASGI)
+* **Frontend Framework:** Streamlit
+* **Contenerización & Redes:** Docker / Docker Compose
 * **Análisis de Datos:** Pandas, NumPy, PyArrow, Liac-ARFF
-* **Motor de Inspección:** `python-magic` (`libmagic`), `charset-normalizer`
+* **Motor de Inspección Binaria:** `python-magic` (`libmagic`), `charset-normalizer`
 * **Testing & Calidad:** Pytest, HTTPX
 
 ---
@@ -28,21 +30,52 @@ Motor polimórfico de alta seguridad desarrollado en Python y FastAPI para la in
 
 ```text
 polydata-engine/
-├── src/
+├── data/                       # Almacenamiento temporal/local de datos
+├── datasets/                   # Datasets de prueba y validación
+│   ├── raw/                    # Datasets sin procesar
+│   └── samples/                # Muestras de prueba (JSON, TXT, etc.)
+│       ├── prueba.json
+│       └── prueba.txt
+├── frontend/                   # Interfaz de usuario en Streamlit (Modular)
+│   ├── components/             # Componentes de renderizado de interfaz
+│   │   ├── __init__.py
+│   │   └── inspection_view.py  # Renderizado de métricas y tarjetas
+│   ├── services/               # Clientes de comunicación HTTP
+│   │   ├── __init__.py
+│   │   └── api_client.py       # Consumo del backend FastAPI
+│   ├── styles/                 # Inyección aislada de CSS
+│   │   ├── __init__.py
+│   │   └── theme.py
+│   ├── utils/                  # Auxiliares de formateo y lógica pura
+│   │   ├── __init__.py
+│   │   └── formatters.py
+│   ├── __init__.py
+│   ├── app.py                  # Orquestador principal de Streamlit
+│   └── config.py               # Configuración del frontend
+├── src/                        # Código fuente del backend
 │   └── pde/
-│       ├── api/
-│       │   └── main.py          # Aplicación FastAPI, Middlewares y Endpoints
-│       └── core/
-│           ├── detector.py      # Motor de detección polimórfica binaria
-│           └── parser.py        # Normalización y parsing seguro de datasets
-├── tests/
-│   ├── test_detector.py         # Pruebas unitarias del detector
+│       ├── __init__.py
+│       ├── api/                # Endpoints y controladores FastAPI
+│       │   ├── __init__.py
+│       │   └── main.py
+│       ├── core/               # Motores principales de procesamiento
+│       │   ├── __init__.py
+│       │   ├── detector.py      # Detección polimórfica y firmas binarias
+│       │   ├── explorer.py      # Inspección estructural de datasets
+│       │   └── parser.py        # Normalización y parsing seguro
+│       └── fetchers/            # Módulos de ingesta y conectores de datos
+│           └── __init__.py
+├── tests/                      # Suite de pruebas automatizadas
+│   ├── test_detector.py         # Pruebas unitarias del detector binario
+│   ├── test_explorer.py         # Pruebas unitarias del explorador
+│   ├── test_integration_block1.py # Pruebas de integración de extremo a extremo
 │   └── test_parser.py           # Pruebas unitarias del parser
-├── Dockerfile                   # Configuración de imagen Docker
-├── docker-compose.yml           # Orquestación de servicios
-├── requirements.txt             # Dependencias del proyecto
-├── pytest.ini                   # Configuración global de pruebas
-└── README.md
+├── .env                        # Variables de entorno del proyecto
+├── Dockerfile                   # Construcción de la imagen Docker
+├── docker-compose.yml           # Orquestación de servicios (api + frontend)
+├── pytest.ini                   # Configuración global de pytest
+├── README.md                    # Documentación principal del proyecto
+└── requirements.txt             # Dependencias unificadas de Python
 ```
 
 ---
@@ -62,21 +95,21 @@ polydata-engine/
 ### 1. Clonar el Repositorio
 
 ```bash
-git clone [https://github.com/tu-usuario/polydata-engine.git](https://github.com/tu-usuario/polydata-engine.git)
+git clone https://github.com/tu-usuario/polydata-engine.git
 cd polydata-engine
 ```
 
-### 2. Configurar el Entorno Virtual
+### 2. Configurar Variables de Entorno
 
-**En Fish Shell (CachyOS / Arch Linux):**
-```fish
-python -m venv ~/.venvs/polydata-engine
-source ~/.venvs/polydata-engine/bin/activate.fish
-pip install --upgrade pip
-pip install -r requirements.txt
+Asegúrate de tener un archivo `.env` en la raíz del proyecto:
+
+```env
+PDE_API_URL=http://localhost:8000
+MAX_FILE_SIZE_MB=50
 ```
 
-**En Bash / Zsh:**
+### 3. Configurar el Entorno Virtual (Ejecución local)
+
 ```bash
 python -m venv venv
 source venv/bin/activate
@@ -88,29 +121,32 @@ pip install -r requirements.txt
 
 ## 🐳 Despliegue con Docker Compose
 
-Para construir y levantar el servicio en segundo plano (*detached mode*):
+Para construir y levantar los contenedores (`pde_api` y `pde_frontend`):
 
 ```bash
 docker compose up -d --build
 ```
 
-### Acceso a la Documentación Interactiva
+### Accesos a los Servicios
 
-* **Swagger UI:** `http://localhost:8000/docs`
-* **ReDoc:** `http://localhost:8000/redoc`
+* **Interfaz Web (Streamlit Frontend):** `http://localhost:8501`
+* **API Backend (FastAPI):** `http://localhost:8000`
+* **Documentación OpenAPI (Swagger UI):** `http://localhost:8000/docs`
+* **Documentación ReDoc:** `http://localhost:8000/redoc`
 
 ### Comandos Útiles de Gestión
 
-* **Estado del contenedor:** `docker compose ps`
-* **Logs en tiempo real:** `docker compose logs -f`
-* **Reiniciar el servicio:** `docker compose restart`
+* **Estado de los contenedores:** `docker compose ps`
+* **Logs del frontend en tiempo real:** `docker compose logs -f frontend`
+* **Logs de la API en tiempo real:** `docker compose logs -f api`
+* **Reiniciar el servicio frontend:** `docker compose restart frontend`
 * **Detener la infraestructura:** `docker compose down`
 
 ---
 
 ## 🧪 Ejecución de Pruebas Automatizadas
 
-La suite de pruebas valida la detección de firmas binarias, el control de límites de tamaño y la sanitización de inyecciones de fórmulas.
+La suite de pruebas valida la detección de firmas binarias, el control de límites de tamaño, la exploración y la sanitización.
 
 **En el entorno virtual local:**
 ```bash
