@@ -1,0 +1,15 @@
+# Entornos virtuales
+venv/
+.venv/
+~/.venvs/
+
+# Caché de Python y testing
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Archivos de entorno y SO
+.env
+.DS_Store
+*.swp

@@ -1,0 +1,32 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pde_api
+    ports:
+      - "8000:8000"
+    
+    # Montaje de volumen para desarrollo local (permite hot-reload de código)
+    volumes:
+      - ./src:/app/src
+    
+    environment:
+      - ENVIRONMENT=development
+    
+    # Comandos con autorecarga activada para desarrollo
+    command: uvicorn src.pde.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+    # ==========================================================================
+    # MEDIDAS DE SEGURIDAD A NIVEL DE CONTENEDOR (Security Hardening)
+    # ==========================================================================
+    security_opt:
+      # Previene la escalada de privilegios dentro del contenedor
+      - no-new-privileges:true
+    
+    # Limita el uso de recursos para prevenir agotamiento de memoria/CPU por DoS
+    deploy:
+      resources:
+        limits:
+          cpus: '1.50'
+          memory: 1024M

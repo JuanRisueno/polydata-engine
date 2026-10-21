@@ -1,0 +1,30 @@
+# ==============================================================================
+# DEPENDENCIAS BASE DE LA APLICACIÓN (Versiones acotadas para evitar breaking changes)
+# ==============================================================================
+
+# Framework web asíncrono y servidor ASGI de alto rendimiento
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+
+# Validación estricta de esquemas y tipos de datos en runtime
+pydantic>=2.0.0
+
+# Ingesta, manipulación y serialización eficiente de conjuntos de datos
+pandas>=2.0.0
+numpy>=1.24.0
+pyarrow>=12.0.0  # Soporte para formato columnar Apache Parquet
+
+# Detección segura de tipos MIME reales y codificaciones de texto
+python-magic>=0.4.27       # Identificación de firma/magic bytes (previene falsa extensión)
+charset-normalizer>=3.0.0   # Detección segura de encoding UTF-8, ISO-8859, etc.
+
+# Soporte para formatos específicos de datasets
+liac-arff>=2.5.0  # Parsado de archivos ARFF (Weka)
+
+# Cliente HTTP asíncrono para descarga segura de datasets remotos
+httpx>=0.24.0
+
+# Framework para pruebas unitarias y de integración
+pytest>=7.0.0
+
+python-multipart>=0.0.6
