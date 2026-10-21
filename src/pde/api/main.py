@@ -1,3 +1,6 @@
+import os
+
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -6,16 +9,31 @@ from src.pde.core.detector import DetectionResult, FileDetector
 from src.pde.core.explorer import DatasetExplorer, DatasetSummary
 from src.pde.core.parser import DatasetParser
 
+load_dotenv()
+
 # ==============================================================================
-# CONFIGURACIÓN Y CONSTANTES DE SEGURIDAD
+# CONFIGURACIÓN Y CONSTANTES DE SEGURIDAD (alineadas con .env)
 # ==============================================================================
 
-# Límite global de tamaño para archivos subidos (50 MB)
-MAX_UPLOAD_SIZE_BYTES: int = 50 * 1024 * 1024
+_DEFAULT_MAX_BYTES = 100 * 1024 * 1024
+MAX_UPLOAD_SIZE_BYTES: int = int(
+    os.getenv("MAX_ALLOWED_BYTES", str(_DEFAULT_MAX_BYTES))
+)
+MAX_UPLOAD_SIZE_MB: int = MAX_UPLOAD_SIZE_BYTES // (1024 * 1024)
+
+_DEFAULT_CORS = (
+    "http://localhost:8501,http://127.0.0.1:8501,"
+    "http://localhost:8000,http://127.0.0.1:8000"
+)
+CORS_ORIGINS: list[str] = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", _DEFAULT_CORS).split(",")
+    if origin.strip()
+]
 
 # Instancias globales de los motores del Bloque 1
 detector = FileDetector(max_allowed_bytes=MAX_UPLOAD_SIZE_BYTES)
-parser = DatasetParser(max_allowed_memory_mb=100)
+parser = DatasetParser(max_allowed_memory_mb=MAX_UPLOAD_SIZE_MB)
 explorer = DatasetExplorer()
 
 
@@ -65,7 +83,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["Authorization", "Content-Type"],

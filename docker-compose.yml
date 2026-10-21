@@ -8,6 +8,8 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
+    env_file:
+      - .env
     environment:
       - ENVIRONMENT=development
       - PYTHONUNBUFFERED=1
@@ -29,12 +31,14 @@ services:
       - "8501:8501"
     volumes:
       - .:/app
+    env_file:
+      - .env
     environment:
       - ENVIRONMENT=development
       - PYTHONUNBUFFERED=1
       - PYTHONPATH=/app
+      # Sobrescribe la URL local del .env para la red interna de Compose
       - PDE_API_URL=http://api:8000
-    # Asegúrate de que ejecute 'streamlit run' y no 'uvicorn':
     command: streamlit run frontend/app.py --server.port=8501 --server.address=0.0.0.0 --browser.gatherUsageStats=false
     depends_on:
       - api

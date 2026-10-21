@@ -9,7 +9,7 @@ Motor polimórfico de alta seguridad desarrollado en Python y FastAPI para la in
 * **Detección Polimórfica de Archivos:** Identificación precisa del tipo MIME real, codificación (*encoding*) y formato mediante firmas binarias (`libmagic` / `charset-normalizer`) e inspección de buffer, evitando la suplantación por extensiones falsas.
 * **Interfaz Web Modular:** Panel interactivo desarrollado en Streamlit desacoplado de la API, estructurado modularmente (`components`, `services`, `styles`, `utils`), con soporte para arrastrar/soltar datasets, visualización de métricas sin truncamiento y limpieza en caliente.
 * **Security by Design:** Middleware de cabeceras HTTP de seguridad estrictamente configuradas (`X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`, `Referrer-Policy` y `Content-Security-Policy` ajustada para Swagger UI).
-* **Procesamiento Seguro:** Prevención de ataques DoS mediante límites de tamaño por petición (50 MB) y gestión directa de buffers en RAM (*Zero-Disk-I/O*).
+* **Procesamiento Seguro:** Prevención de ataques DoS mediante límites de tamaño por petición (configurable, 100 MB por defecto) y gestión directa de buffers en RAM (*Zero-Disk-I/O*).
 * **Infraestructura Contenerizada:** Orquestación mediante Docker y Docker Compose aislando los servicios de backend (`api`) y frontend (`frontend`) en una red privada interna.
 
 ---
@@ -105,8 +105,12 @@ Asegúrate de tener un archivo `.env` en la raíz del proyecto:
 
 ```env
 PDE_API_URL=http://localhost:8000
-MAX_FILE_SIZE_MB=50
+MAX_FILE_SIZE_MB=100
+MAX_ALLOWED_BYTES=104857600
+CORS_ORIGINS=http://localhost:8501,http://127.0.0.1:8501,http://localhost:8000,http://127.0.0.1:8000
 ```
+
+> Copia `.env-ejemplo` a `.env` y ajusta si hace falta. Backend y frontend leen los mismos límites y orígenes CORS.
 
 ### 3. Configurar el Entorno Virtual (Ejecución local)
 

@@ -15,19 +15,13 @@ class PDEApiClient:
     """
 
     def __init__(self, base_url: Optional[str] = None):
-        # Si no se pasa una URL base, intentamos usar Config o un valor por defecto
-        if base_url:
-            self.base_url = base_url.rstrip('/')
-        elif hasattr(Config, 'PDE_API_URL'):
-            self.base_url = Config.PDE_API_URL.rstrip('/')
-        elif hasattr(Config, 'DETECT_ENDPOINT'):
-            # Derivamos la base quitándole el sufijo /detect si lo tuviera
-            self.base_url = Config.DETECT_ENDPOINT.rsplit('/detect', 1)[0]
-        else:
-            self.base_url = "http://localhost:8000"
-
-        self.detect_url = f"{self.base_url}/detect"
-        self.extract_detect_url = f"{self.base_url}/extract-and-detect"
+        self.base_url = (base_url or Config.PDE_API_URL).rstrip("/")
+        self.detect_url = Config.DETECT_ENDPOINT if not base_url else f"{self.base_url}/detect"
+        self.extract_detect_url = (
+            Config.EXTRACT_DETECT_ENDPOINT
+            if not base_url
+            else f"{self.base_url}/extract-and-detect"
+        )
 
     def detect_file(self, file_bytes: bytes, filename: str) -> Tuple[bool, Optional[Dict[str, Any]], str]:
         """
