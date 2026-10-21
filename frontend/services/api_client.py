@@ -11,11 +11,23 @@ from frontend.config import Config
 
 class PDEApiClient:
     """
-    Cliente encarado a consumir los endpoints de inspección del backend FastAPI.
+    Cliente encargado de consumir los endpoints de inspección del backend FastAPI.
     """
 
-    def __init__(self, endpoint_url: str = Config.DETECT_ENDPOINT):
-        self.endpoint_url = endpoint_url
+    def __init__(self, base_url: Optional[str] = None):
+        # Si no se pasa una URL base, intentamos usar Config o un valor por defecto
+        if base_url:
+            self.base_url = base_url.rstrip('/')
+        elif hasattr(Config, 'PDE_API_URL'):
+            self.base_url = Config.PDE_API_URL.rstrip('/')
+        elif hasattr(Config, 'DETECT_ENDPOINT'):
+            # Derivamos la base quitándole el sufijo /detect si lo tuviera
+            self.base_url = Config.DETECT_ENDPOINT.rsplit('/detect', 1)[0]
+        else:
+            self.base_url = "http://localhost:8000"
+
+        self.detect_url = f"{self.base_url}/detect"
+        self.extract_detect_url = f"{self.base_url}/extract-and-detect"
 
     def detect_file(self, file_bytes: bytes, filename: str) -> Tuple[bool, Optional[Dict[str, Any]], str]:
         """
@@ -23,7 +35,30 @@ class PDEApiClient:
         """
         try:
             files = {'file': (filename, file_bytes)}
-            response = requests.post(self.endpoint_url, files=files, timeout=60)
+            response = requests.post(self.detect_url, files=files, timeout=60)
+
+            if response.status_code == 200:
+                return True, response.json(), ""
+
+            detail = "Error en el servidor"
+            try:
+                detail = response.json().get("detail", detail)
+            except Exception:
+                pass
+
+            return False, None, f"Error HTTP {response.status_code}: {detail}"
+
+        except requests.exceptions.RequestException as err:
+            return False, None, f"Error de conexión con la API: {str(err)}"
+
+    def extract_and_detect_file(self, file_bytes: bytes, zip_filename: str, target_filename: str) -> Tuple[bool, Optional[Dict[str, Any]], str]:
+        """
+        Envia el ZIP y el nombre del sub-archivo seleccionado al endpoint /extract-and-detect.
+        """
+        try:
+            files = {'file': (zip_filename, file_bytes)}
+            data = {'target_filename': target_filename}
+            response = requests.post(self.extract_detect_url, files=files, data=data, timeout=60)
 
             if response.status_code == 200:
                 return True, response.json(), ""

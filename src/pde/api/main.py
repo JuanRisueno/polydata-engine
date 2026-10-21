@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile, status
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -112,7 +112,8 @@ async def health_check():
     description=(
         "Recibe un archivo enviado mediante un formulario multipart/form-data, "
         "inspecciona sus firmas binarias en memoria, determina su tipo MIME real, "
-        "su codificación de texto (encoding) y su estructura de dataset."
+        "su codificación de texto (encoding) y su estructura de dataset. "
+        "Si es un ZIP, cataloga todos sus sub-archivos internos."
     )
 )
 async def detect_file(file: UploadFile = File(...)):
@@ -134,6 +135,51 @@ async def detect_file(file: UploadFile = File(...)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error interno durante la inspección del archivo: {str(err)}"
+        )
+
+
+@app.post(
+    "/extract-and-detect",
+    response_model=DetectionResult,
+    status_code=status.HTTP_200_OK,
+    summary="Extraer un archivo específico dentro de un ZIP y analizarlo",
+    tags=["Detection Engine"],
+    description=(
+        "Recibe un contenedor ZIP y el nombre del sub-archivo objetivo. "
+        "Extrae el archivo seleccionado en memoria (Zero-Disk-I/O) y ejecuta "
+        "la inspección y clasificación binaria completa sobre él."
+    )
+)
+async def extract_and_detect_file(
+    file: UploadFile = File(...),
+    target_filename: str = Form(...)
+):
+    try:
+        content = await file.read()
+        
+        # 1. Extraer el sub-archivo específico del ZIP en RAM
+        extracted_bytes = detector.extract_zip_entry(
+            content=content,
+            target_filename=target_filename
+        )
+
+        # 2. Analizar el buffer del sub-archivo extraído
+        result = detector.analyze_bytes(
+            content=extracted_bytes,
+            filename=target_filename
+        )
+        return result
+
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(val_err)
+        )
+
+    except Exception as err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno al extraer y analizar el archivo del ZIP: {str(err)}"
         )
 
 

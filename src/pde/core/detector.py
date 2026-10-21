@@ -15,6 +15,7 @@ Funcionalidades Principales:
     charset-normalizer.
     - Clasificación polimórfica de formatos heterogéneos de datasets (CSV,
     TSV, JSON, ARFF, Parquet).
+    - Inspección y catálogo en memoria de contenedores ZIP (Zero-Disk-I/O).
     - Normalización dinámica del tipo MIME según el contenido real analizado.
     - Validación de límites de tamaño de archivo y prevención de ataques DoS 
     (Security by Design).
@@ -24,9 +25,11 @@ Principios de Diseño:
     - Salida estructurada y serializable compatible con esquemas de Pydantic.
 ===============================================================================
 """
+import io
 import magic
+import zipfile
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field
 from charset_normalizer import from_bytes
 
@@ -34,6 +37,17 @@ from charset_normalizer import from_bytes
 # ==============================================================================
 # ESQUEMAS DE SALIDA (Pydantic)
 # ==============================================================================
+
+class ContainedFile(BaseModel):
+    """
+    Información detallada de un archivo contenido dentro de un archivo comprimido.
+    """
+    filename: str = Field(..., description="Ruta relativa/nombre del archivo dentro del contenedor")
+    file_size_bytes: int = Field(..., description="Tamaño descomprimido en bytes")
+    extension: str = Field(..., description="Extensión del archivo (ej. .csv, .txt)")
+    is_dataset_candidate: bool = Field(..., description="Indica si es un candidato potencial a dataset")
+    suggested_type: str = Field(..., description="Tipo de dataset sugerido (csv, json, parquet, etc.)")
+
 
 class DetectionResult(BaseModel):
     """
@@ -45,6 +59,11 @@ class DetectionResult(BaseModel):
     dataset_type: str = Field(..., description="Tipo de dataset: csv, tsv, json, arff, parquet, zip, unknown")
     file_size_bytes: int = Field(..., description="Tamaño real del archivo en bytes")
     is_text: bool = Field(..., description="Indica si el contenido es interpretable como texto")
+    
+    # Atributos extendidos para contenedores (ZIP)
+    is_container: bool = Field(False, description="Indica si el archivo es un contenedor con sub-archivos")
+    contained_files: Optional[List[ContainedFile]] = Field(None, description="Lista de archivos contenidos si es ZIP")
+    recommended_file: Optional[str] = Field(None, description="Nombre del archivo candidato recomendado")
 
 
 # ==============================================================================
@@ -58,6 +77,9 @@ class FileDetector:
 
     # Límite por defecto para prevenir DoS por agotamiento de RAM (100 MB)
     DEFAULT_MAX_BYTES: int = 100 * 1024 * 1024
+
+    # Extensiones consideradas candidatos naturales a datasets
+    DATASET_EXTENSIONS = {'.csv', '.tsv', '.json', '.arff', '.parquet', '.xlsx'}
 
     def __init__(self, max_allowed_bytes: int = DEFAULT_MAX_BYTES):
         self.max_allowed_bytes = max_allowed_bytes
@@ -115,14 +137,80 @@ class FileDetector:
             if best_match:
                 encoding = best_match.encoding
 
+        # F. Inspección especializada de contenidos si es un archivo ZIP
+        is_container = False
+        contained_files = None
+        recommended_file = None
+
+        if dataset_type == "zip":
+            is_container = True
+            contained_files = self.inspect_zip_contents(content)
+            
+            # Seleccionar el primer candidato recomendado
+            for cf in contained_files:
+                if cf.is_dataset_candidate:
+                    recommended_file = cf.filename
+                    break
+
         return DetectionResult(
             filename=filename,
             mime_type=mime_type,
             encoding=encoding,
             dataset_type=dataset_type,
             file_size_bytes=size_bytes,
-            is_text=is_text
+            is_text=is_text,
+            is_container=is_container,
+            contained_files=contained_files,
+            recommended_file=recommended_file
         )
+
+    def inspect_zip_contents(self, content: bytes) -> List[ContainedFile]:
+        """
+        Inspecciona los metadatos internos de un archivo ZIP en memoria (Zero-Disk-I/O).
+        """
+        contained_files: List[ContainedFile] = []
+
+        try:
+            with zipfile.ZipFile(io.BytesIO(content), 'r') as z:
+                for file_info in z.infolist():
+                    # Ignorar directorios implícitos y archivos ocultos/sistema (macOS, Linux)
+                    if file_info.is_dir() or file_info.filename.startswith("__MACOSX/") or Path(file_info.filename).name.startswith("._"):
+                        continue
+
+                    fname = file_info.filename
+                    fsize = file_info.file_size
+                    ext = Path(fname).suffix.lower()
+
+                    is_candidate = ext in self.DATASET_EXTENSIONS
+                    suggested_type = ext.replace('.', '') if is_candidate else "desconocido"
+
+                    contained_files.append(
+                        ContainedFile(
+                            filename=fname,
+                            file_size_bytes=fsize,
+                            extension=ext,
+                            is_dataset_candidate=is_candidate,
+                            suggested_type=suggested_type
+                        )
+                    )
+        except zipfile.BadZipFile:
+            raise ValueError("El archivo comprimido ZIP está dañado o no es válido.")
+
+        # Ordenar: primero los mejores candidatos a dataset
+        contained_files.sort(key=lambda x: x.is_dataset_candidate, reverse=True)
+        return contained_files
+
+    def extract_zip_entry(self, content: bytes, target_filename: str) -> bytes:
+        """
+        Extrae en RAM un archivo específico dentro de un ZIP.
+        """
+        try:
+            with zipfile.ZipFile(io.BytesIO(content), 'r') as z:
+                if target_filename not in z.namelist():
+                    raise ValueError(f"El archivo '{target_filename}' no existe dentro del contenedor ZIP.")
+                return z.read(target_filename)
+        except zipfile.BadZipFile:
+            raise ValueError("El archivo comprimido ZIP está dañado o no es válido.")
 
     def _resolve_dataset_type(self, mime_type: str, sample: bytes, suffix: str) -> str:
         """
